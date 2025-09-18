@@ -10,4 +10,12 @@ func main() {
 		panic(err)
 	}
 	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			continue
+		}
+		go handleConnection(conn)
+	}
 }
