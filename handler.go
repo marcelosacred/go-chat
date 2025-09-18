@@ -1,22 +1,67 @@
 package main
 
 import (
-    "net"
-    "bufio"
-    "fmt"
+	"bufio"
+	"fmt"
+	"net"
+	"strings"
 )
 
-func handleConnection(conn net.Conn) {
-    defer conn.Close()
+var clients = make(map[net.Conn]string)
 
-    reader := bufio.NewReader(conn)
-    for {
-        msg, err := reader.ReadString('\n')
-        if err != nil {
-            fmt.Println("client disconnected")
-            return
-        }
-        fmt.Printf("got message: %s", msg)
-        conn.Write([]byte("echo: " + msg))
-    }
+var history []string
+const historyLimit = 50
+
+func handleConnection(conn net.Conn) {
+	defer func() {
+		fmt.Println("Client disconnected:", conn.RemoteAddr())
+		delete(clients, conn)
+		conn.Close()
+	}()
+
+	conn.Write([]byte("Welcome! Please enter your nickname: "))
+	reader := bufio.NewScanner(conn)
+
+	// Читаем никнейм
+	reader.Scan()
+	nickname := strings.TrimSpace(reader.Text())
+	if nickname == "" {
+		nickname = "Anonymous"
+	}
+	clients[conn] = nickname
+	fmt.Println(nickname, "connected from", conn.RemoteAddr())
+	conn.Write([]byte("Hello, " + nickname + "!\n"))
+
+	// Отправляем историю сообщений новому клиенту
+	for _, msg := range history {
+		conn.Write([]byte(msg + "\n"))
+	}
+
+	// Читаем сообщения от клиента
+	for reader.Scan() {
+		msg := reader.Text()
+		fullMsg := nickname + ": " + msg
+
+		// Добавляем в историю
+		history = append(history, fullMsg)
+		if len(history) > historyLimit {
+			history = history[1:]
+		}
+
+		// Рассылаем всем остальным
+		broadcast(conn, fullMsg)
+	}
+
+	if err := reader.Err(); err != nil {
+		fmt.Println("Read error:", err)
+	}
+}
+
+// broadcast отправляет сообщение всем клиентам, кроме отправителя
+func broadcast(sender net.Conn, msg string) {
+	for client := range clients {
+		if client != sender {
+			_, _ = client.Write([]byte(msg + "\n"))
+		}
+	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 )
 
@@ -10,6 +11,8 @@ func main() {
 		panic(err)
 	}
 	defer listener.Close()
+
+	fmt.Println("Chat server listening on :8080")
 
 	for {
 		conn, err := listener.Accept()
